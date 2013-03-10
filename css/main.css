@@ -1,0 +1,86 @@
+
+
+/*********************************************
+ * GLOBAL
+ *********************************************/
+
+body, html {
+    overflow: hidden;
+	font-family: Helvetica, Arial, sans-serif;
+	color: #fff;
+	font-size: 11px;
+	background: #111;
+}
+
+a[href="http://www.w3counter.com"] {
+	display: none!important;
+}
+
+.no-canvas {
+	color: #999999;
+	font-size: 24px;
+	text-align: center;
+	margin-top: 150px;
+}
+
+
+/*********************************************
+ * EXPERIMENT STYLES
+ *********************************************/
+
+#game {
+	/*background: url('../images/background.jpg');*/
+	
+	position: absolute;
+	/*display: none;*/
+	border: 1px solid #222222;
+	border-radius: 2px;
+	
+	font-family: 'Ubuntu', Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	
+	color: #f4f4f4;
+	text-align: center;
+	
+	-webkit-box-shadow: 0 0 10px #000;
+	   -moz-box-shadow: 0 0 10px #000;
+	     -o-box-shadow: 0 0 10px #000;
+	        box-shadow: 0 0 10px #000;
+}
+
+#world {
+	position: absolute;
+	top: 0;
+	left: 0;
+}
+
+#score {
+	margin: 20px 0 15px;
+	display: none;
+}
+	
+	#score h3 {
+		font-size: 22px;
+	}
+	
+	#score p {
+		color: rgba(100,240,255,0.9);
+		font-size: 64px;
+	}
+
+#start-button {
+	margin-top: 20px;
+}
+
+#lag-warning {
+	position: relative;
+	top: -35px;
+	color: #777;
+	display: none;
+}
+
+	#lag-warning a {
+		color: #aaa;
+		text-decoration: none;
+	}
+
