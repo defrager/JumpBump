@@ -18,7 +18,6 @@ var URLUtil = {
 	
 };
 
-
 // shim layer with setTimeout fallback from http://paulirish.com/2011/requestanimationframe-for-smart-animating/
 window.requestAnimFrame = (function(){
   return  window.requestAnimationFrame       || 
@@ -26,11 +25,10 @@ window.requestAnimFrame = (function(){
           window.mozRequestAnimationFrame    || 
           window.oRequestAnimationFrame      || 
           window.msRequestAnimationFrame     || 
-          function(/* function */ callback, /* DOMElement */ element){
+          function(callback, element){
             window.setTimeout(callback, 1000 / 60);
           };
 })();
-
 
 function rnd(limit) {
     return Math.floor(Math.random() * limit);

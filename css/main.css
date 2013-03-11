@@ -32,7 +32,7 @@ a[href="http://www.w3counter.com"] {
 	/*background: url('../images/background.jpg');*/
 	
 	position: absolute;
-	/*display: none;*/
+	display: none;
 	border: 1px solid #222222;
 	border-radius: 2px;
 	
