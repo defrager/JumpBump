@@ -29,6 +29,29 @@ var PlayerAnimation = {
 	}
 }
 
+var ObjectAnimation = {
+	SPRING: {
+		frame: [{ image: 0, ticks: 3 }, { image: 1, ticks: 3 }, { image: 2, ticks: 3 }, { image: 4, ticks: 3 }, { image: 5, ticks: 3}]
+	},
+	SPLASH: {
+		frame: [{ image: 6, ticks: 2 },{ image: 7, ticks: 2 },{ image: 8, ticks: 2 },{ image: 9, ticks: 2 },{ image: 10, ticks: 2 },{ image: 11, ticks: 2 },{ image: 12, ticks: 2 },{ image: 13, ticks: 2 },{ image: 14, ticks: 2 }]
+	}
+}
+
+var GameObject = {
+	Splash: function () {
+		this.temporal = true;
+	},
+
+	Spring: function () {
+		this.resetAnimation = function () {
+			this.frame = 0;
+			this.ticks = this.anim.frame[0].ticks;
+			this.image = this.anim.frame[0].image;
+		}
+	}
+}
+
 var PlayerDirection = {
 	LEFT: 1,
 	RIGHT: 0
@@ -128,6 +151,7 @@ var Tile = {
 function Level() {
 	this.ready = false;
 	this.backgroundImage;
+	this.foregroundImage;
 	this.tiles = [];
 	this.ROW_COUNT = 16;
 	this.COLUMN_COUNT = 22;
@@ -135,31 +159,25 @@ function Level() {
 	this.TILE_HEIGHT = 16;
 
 	this.load = function (atlasDataUrl, callback) {
-		$.ajax({
-			url: atlasDataUrl,
-			dataType: "text",
-			level: this,
-			onLevelLoad: callback,
-			success: function (data) {
-				var parsed = JSON.parse(data);
-				var level = this.level;
+		loadJSON(atlasDataUrl, this, function (level, parsed) {
+			level.backgroundImage = new Image();
+			level.backgroundImage.src = parsed.backgroundImage;
 
-				level.backgroundImage = new Image();
-				level.backgroundImage.src = parsed.backgroundImage;
+			level.foregroundImage = new Image();
+			level.foregroundImage.src = parsed.foregroundImage;
 
-				for (var s in parsed.rows) {
-					var row = parsed.rows[s];
-					level.tiles.push(row);
-				}
-				level.ready = true;
-				this.onLevelLoad();
+			for (var s in parsed.rows) {
+				var row = parsed.rows[s];
+				level.tiles.push(row);
 			}
+			level.ready = true;
+			callback();
 		});
 	}
 
 	this.positionPlayers = function (players) {
 		for (var i in players) {
-			positionPlayer(players[i], players);
+			this.positionPlayer(players[i], players);
 		}
 	}
 
@@ -197,31 +215,23 @@ function Atlas() {
 	this.ready = false;
 
 	this.load = function (atlasDataUrl) {
-		$.ajax({
-			url: atlasDataUrl,
-			dataType: "text",
-			atlas: this,
-			success: function (data) {
-				var parsed = JSON.parse(data);
-				var atlas = this.atlas;
+		loadJSON(atlasDataUrl, this, function (atlas, parsed) {
+			atlas.image = new Image();
+			atlas.image.src = parsed.imageSource;
 
-				atlas.image = new Image();
-				atlas.image.src = parsed.imageSource;
-
-				for (var s in parsed.sprites) {
-					var data = parsed.sprites[s];
-					sprite = new Sprite();
-					sprite.x = data.x;
-					sprite.y = data.y;
-					sprite.width = data.width;
-					sprite.height = data.height;
-					sprite.hotspot_x = data.hotspot_x;
-					sprite.hotspot_y = data.hotspot_y;
-					sprite.image = this.atlas.image;
-					atlas.sprites.push(sprite);
-				}
-				atlas.ready = true
+			for (var s in parsed.sprites) {
+				var data = parsed.sprites[s];
+				sprite = new Sprite();
+				sprite.x = data.x;
+				sprite.y = data.y;
+				sprite.width = data.width;
+				sprite.height = data.height;
+				sprite.hotspot_x = data.hotspot_x;
+				sprite.hotspot_y = data.hotspot_y;
+				sprite.image = atlas.image;
+				atlas.sprites.push(sprite);
 			}
+			atlas.ready = true
 		});
 	}
 
@@ -272,7 +282,7 @@ var JumpBump = (function(){
 	var DEFAULT_WIDTH = 400,
 		DEFAULT_HEIGHT = 256;
 	var MENU_FADE_IN_DURATION = 600;
-	var SCALE = 2.0;
+	var SCALE = 1.5;
     // Flags if the game should output debug information
 	var DEBUG = URLUtil.queryValue('debug') == '1';
 
@@ -296,6 +306,7 @@ var JumpBump = (function(){
 	var screen;
 	var objects = [];
 	var rabbitAtlas;
+	var objectsAtlas;
 	var input;
 	var level;
 	var menuMode = false;
@@ -334,6 +345,9 @@ var JumpBump = (function(){
 
 		rabbitAtlas = new Atlas();
 		rabbitAtlas.load('images/rabbit.json.txt');
+
+		objectsAtlas = new Atlas();
+		objectsAtlas.load('images/objects.json.txt');
 	}
 
 	function loadLevel() {
@@ -343,6 +357,13 @@ var JumpBump = (function(){
 
 	function onLevelLoad() {
 		level.positionPlayers(players);
+		for (var row = 0; row < level.ROW_COUNT; row++) {
+			for (var column = 0; column < level.COLUMN_COUNT; column++) {
+				if (level.tiles[row][column] == Tile.SPRING) {
+					addObject(new GameObject.Spring(), column * level.TILE_WIDTH, row * level.TILE_HEIGHT, 0, 0, ObjectAnimation.SPRING, ObjectAnimation.SPRING.frame.length - 1);
+				}
+			}
+		}
 	}
 
 	function initScreen() {
@@ -380,6 +401,8 @@ var JumpBump = (function(){
 			var player = players[i];
 			screen.addSprite(rabbitAtlas.getSprite(player.image + 18 * player.id), Math.floor(player.x),  Math.floor(player.y));
 		}
+
+		updateObjects();
 	
 		if (menuMode) {
 			screen.context.drawImage(menuBackground, 0, 0, world.width, world.height);
@@ -389,9 +412,33 @@ var JumpBump = (function(){
 
 		screen.drawSprites();
 
+		if (!menuMode && level.ready) {
+			screen.context.drawImage(level.foregroundImage, 0, 0, world.width, world.height);
+		}
+
 		context.drawImage(screen.canvas, 0, 0, world.width, world.height, 0, 0, screenSize.width, screenSize.height);
 	  
 		requestAnimFrame(update);
+	}
+
+	function updateObjects() {
+		for (var i = objects.length - 1; i >= 0; i--) {
+			var object = objects[i];
+			object.ticks--;
+			if (object.ticks <= 0) {
+				object.frame++;
+				if (object.frame >= object.anim.frame.length) {
+					if (object.temporal) {
+						objects.splice(i, 1);
+						continue;
+					}
+					object.frame--;
+				}
+				object.ticks = object.anim.frame[object.frame].ticks;
+				object.image = object.anim.frame[object.frame].image;
+			}
+			screen.addSprite(objectsAtlas.getSprite(object.image), Math.floor(object.x), Math.floor(object.y));
+		}
 	}
 
 	function getTile(y, x) {
@@ -403,6 +450,20 @@ var JumpBump = (function(){
 			return Tile.GROUND;
 		}
 		return level.tiles[row][Math.floor(x / level.TILE_WIDTH)]
+	}
+
+	function addObject(object, x, y, x_add, y_add, anim, frame) {
+		object.x = x;
+		object.y = y;
+		object.x_add = x_add;
+		object.y_add = y_add;
+		object.x_acc = 0;
+		object.y_acc = 0;
+		object.anim = anim;
+		object.frame = frame;
+		object.ticks = anim.frame[frame].ticks;
+		object.image = anim.frame[frame].image;
+		objects.push(object);
 	}
 
 	function checkDeath() {
@@ -595,6 +656,14 @@ var JumpBump = (function(){
 			player.jump_ready = false;
 			player.jump_abort = false;
 			console.log("Jump");
+
+			for (var i in objects) {
+				var object = objects[i];
+				if (object.anim == ObjectAnimation.SPRING) { // TODO: Add multiple spring support.
+					object.resetAnimation();
+				}
+			}
+
 			// TODO(Spring Sound);
 		}
 
@@ -608,8 +677,9 @@ var JumpBump = (function(){
 			if (!player.in_water) {
 				player.in_water = true;
 				player.setAnimation(PlayerAnimation.SWIMDOWN);
-				if (player.y_add > 8 * UNIT) {
-					// TODO: Add Splah.
+				if (player.y_add >= 8 * UNIT) {
+					// TODO: Add Splash sound.
+					addObject(new GameObject.Splash(), player.x + 8, Math.floor((player.y) / cy) * cy + cy - 1, 0, 0, ObjectAnimation.SPLASH, 0);
 				}
 			}
 			player.y_add -= 0.375 * UNIT;

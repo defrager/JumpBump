@@ -1,5 +1,6 @@
 {
 	"backgroundImage": "images\/level.png",
+	"foregroundImage": "images\/level_mask.png",
 	"rows": [
 		"1110000000000000000000",
 		"1000000000001000011000",

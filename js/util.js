@@ -33,3 +33,13 @@ window.requestAnimFrame = (function(){
 function rnd(limit) {
     return Math.floor(Math.random() * limit);
 }
+
+function loadJSON(url, element, callback) {
+	$.ajax({
+		url: url,
+		dataType: "text",
+		success: function (data) {
+			callback(element, JSON.parse(data));
+		}
+	});
+}
