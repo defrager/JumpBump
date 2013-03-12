@@ -344,6 +344,7 @@ var JumpBump = (function(){
 			alert('Doesn\'t seem like your browser supports the HTML5 canvas element :(');
 			return;
 		}
+
 		window.addEventListener('resize', onWindowResizeHandler, false);
 
 		input = new Input();
@@ -439,6 +440,7 @@ var JumpBump = (function(){
 			screen.context.drawImage(level.foregroundImage, 0, 0, world.width, world.height);
 		}
 
+		context.webkitImageSmoothingEnabled = false;
 		context.drawImage(screen.canvas, 0, 0, world.width, world.height, 0, 0, screenSize.width, screenSize.height);
 	  
 		requestAnimFrame(update);
