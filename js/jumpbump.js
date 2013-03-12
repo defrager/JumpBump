@@ -35,6 +35,15 @@ var ObjectAnimation = {
 	},
 	SPLASH: {
 		frame: [{ image: 6, ticks: 2 },{ image: 7, ticks: 2 },{ image: 8, ticks: 2 },{ image: 9, ticks: 2 },{ image: 10, ticks: 2 },{ image: 11, ticks: 2 },{ image: 12, ticks: 2 },{ image: 13, ticks: 2 },{ image: 14, ticks: 2 }]
+	},
+	SMOKE: {
+		frame: [{ image: 15, ticks: 3 },{ image: 16, ticks: 3 },{ image: 17, ticks: 3 },{ image: 18, ticks: 3 },{ image: 19, ticks: 3 }]
+	},
+	FLESH_TRACE: {
+		frame: [{ image: 76, ticks: 4 },{ image: 77, ticks: 4},{ image: 78, ticks: 4 },{ image: 79, ticks: 4 }]
+	},
+	FUR: {
+		frame: [{ image: 44, ticks: 1 }, { image: 44 + 8, ticks: 1 }, { image: 44 + 16, ticks: 1 }, { image: 44 + 24, ticks: 1 }]
 	}
 }
 
@@ -42,15 +51,27 @@ var GameObject = {
 	Splash: function () {
 		this.temporal = true;
 	},
-
 	Spring: function () {
 		this.resetAnimation = function () {
 			this.frame = 0;
 			this.ticks = this.anim.frame[0].ticks;
 			this.image = this.anim.frame[0].image;
 		}
-	}
+	},
+	Flesh: function () {
+		this.temporal = true;
+	},
+	Fur: function () {
+		this.temporal = true;
+	},
+	FleshTrace: function () {
+		this.temporal = true;
+	},
+	Smoke: function () {
+		this.temporal = true;
+	},
 }
+
 
 var PlayerDirection = {
 	LEFT: 1,
@@ -127,7 +148,7 @@ function Screen(width, height) {
 	}
 
 	this.drawSprites = function () {
-		for (var key in this.sprites) {
+		for (var key = this.sprites.length - 1; key >= 0; key--) {
 			var drawObject = this.sprites[key];
 			var sprite = drawObject.sprite;
 			this.context.drawImage(sprite.image, sprite.x, sprite.y, sprite.width, sprite.height,
@@ -282,7 +303,9 @@ var JumpBump = (function(){
 	var DEFAULT_WIDTH = 400,
 		DEFAULT_HEIGHT = 256;
 	var MENU_FADE_IN_DURATION = 600;
-	var SCALE = 1.5;
+	var SCALE = 2;
+	var UNIT = 1.0 / 16;
+
     // Flags if the game should output debug information
 	var DEBUG = URLUtil.queryValue('debug') == '1';
 
@@ -422,22 +445,161 @@ var JumpBump = (function(){
 	}
 
 	function updateObjects() {
+		var cx = level.TILE_WIDTH, cy = level.TILE_HEIGHT;
+
 		for (var i = objects.length - 1; i >= 0; i--) {
 			var object = objects[i];
-			object.ticks--;
-			if (object.ticks <= 0) {
-				object.frame++;
-				if (object.frame >= object.anim.frame.length) {
-					if (object.temporal) {
-						objects.splice(i, 1);
-						continue;
+			// I'm not proud for this method. Refactor.
+			if (object instanceof GameObject.Splash || object instanceof GameObject.Spring
+				|| object instanceof GameObject.FleshTrace || object instanceof GameObject.Smoke) {
+				object.x += object.x_add;
+				object.y += object.y_add;
+				object.ticks--;
+				if (object.ticks <= 0) {
+					object.frame++;
+					if (object.frame >= object.anim.frame.length) {
+						if (object.temporal) {
+							objects.splice(i, 1);
+							continue;
+						}
+						object.frame--;
 					}
-					object.frame--;
+					object.ticks = object.anim.frame[object.frame].ticks;
+					object.image = object.anim.frame[object.frame].image;
 				}
-				object.ticks = object.anim.frame[object.frame].ticks;
-				object.image = object.anim.frame[object.frame].image;
+				screen.addSprite(objectsAtlas.getSprite(object.image), Math.floor(object.x), Math.floor(object.y));
+			} else if (object instanceof GameObject.Fur) {
+				if (rnd(100) < 30) {
+					addObject(new GameObject.FleshTrace(), object.x, object.y, 0, 0, ObjectAnimation.FLESH_TRACE, 0);
+				}
+				
+				if (getTile(object.y, object.x) == Tile.NONE) {
+					object.y_add += 0.75 * UNIT;
+					if (object.y_add > 48 * UNIT) object.y_add = 48 * UNIT;
+				} else if (getTile(object.y, object.x) == Tile.WATER) {
+					if (object.x_add < 0) {
+						object.x_add = Math.max(object.x_add, -16 * UNIT);
+						object.x_add += 0.25 * UNIT;
+						object.x_add = Math.min(object.x_add, 0);
+					} else {
+						object.x_add = Math.min(object.x_add, 16 * UNIT);
+						object.x_add -= 0.25 * UNIT;
+						object.x_add = Math.max(object.x_add, 0);
+					}
+					object.y_add += 0.25 * UNIT;
+					object.y_add = Math.min(object.y_add, 16 * UNIT);
+					object.y_add = Math.max(object.y_add, -16 * UNIT);
+				}
+				object.x += object.x_add;
+				object.y += object.y_add;
+				
+				if (object.x < -5 || object.x > 405 || object.y > 260) { // TODO: fix constants
+					objects.splice(i, 1);
+					continue;
+				}
+				
+				if (!Tile.isOneOf(getTile(object.y, object.x), [Tile.NONE, Tile.WATER])) {
+					if (object.y_add < 0) {
+						object.y = Math.floor((object.y + cy / 2) / cy) * cy;
+						object.x_add /= 2;
+						object.y_add = -object.y_add / 2;
+					} else if (Tile.isOneOf(getTile(object.y, object.x),  [Tile.GROUND, Tile.SPRING])) {
+						if (object.y_add > 32 * UNIT) {
+							object.y = Math.floor((object.y + cy / 2) / cy) * cy - UNIT;
+							object.x_add /= 2;
+							object.y_add = -object.y_add / 2;
+						} else {
+							objects.splice(i, 1);
+							continue;
+						}
+					} else if (getTile(object.y, object.x) == Tile.ICE) {
+						object.y = Math.floor((object.y + cy / 2) / cy) * cy - UNIT;
+						if (object.y_add > 32 * UNIT) {
+							object.y_add = -object.y_add / 2;
+						} else {
+							object.y_add = 0;
+						}
+					}
+				}
+				if (Tile.isOneOf(getTile(object.y, object.x), [Tile.GROUND, Tile.ICE, Tile.SPRING])) {
+					object.x = Math.floor((object.x + cx / 2) / cx) * cx;
+					object.x_add = -object.x_add / 2;
+				}
+				if (object.x_add < 0 && object.x_add > -4 * UNIT)
+					object.x_add = -4 * UNIT;
+				if (object.x_add > 0 && object.x_add < 4 * UNIT)
+					object.x_add = 4 * UNIT;
+				var angle = Math.round((Math.atan2(-object.y_add, -object.x_add) + Math.PI) * 4 / Math.PI);
+
+				if (angle < 0) angle += 8;
+				if (angle < 0) angle = 0;
+				if (angle > 7) angle = 7;
+				screen.addSprite(objectsAtlas.getSprite(object.image + angle), Math.floor(object.x), Math.floor(object.y));
+			} else if (object instanceof GameObject.Flesh) {
+				if (rnd(100) < 30) {
+					addObject(new GameObject.FleshTrace(), object.x, object.y, 0, 0, ObjectAnimation.FLESH_TRACE, object.frame);
+				}
+
+				if (getTile(object.y, object.x) == Tile.NONE) {
+					object.y_add += 0.75 * UNIT;
+					if (object.y_add > 48 * UNIT) object.y_add = 48 * UNIT;
+				} else if (getTile(object.y, object.x) == Tile.WATER) {
+					if (object.x_add < 0) {
+						object.x_add = Math.max(object.x_add, -16 * UNIT);
+						object.x_add += 0.25 * UNIT;
+						object.x_add = Math.min(object.x_add, 0);
+					} else {
+						object.x_add = Math.min(object.x_add, 16 * UNIT);
+						object.x_add -= 0.25 * UNIT;
+						object.x_add = Math.max(object.x_add, 0);
+					}
+					object.y_add += 0.25 * UNIT;
+					object.y_add = Math.min(object.y_add, 16 * UNIT);
+					object.y_add = Math.max(object.y_add, -16 * UNIT);
+				}
+				object.x += object.x_add;
+				object.y += object.y_add;
+
+				if (object.x < -5 || object.x > 405 || object.y > 260) { // TODO: fix constants
+					objects.splice(i, 1);
+					continue;
+				}
+
+				if (!Tile.isOneOf(getTile(object.y, object.x), [Tile.NONE, Tile.WATER])) {
+					if (object.y_add < 0) {
+						object.y = Math.floor((object.y + cy / 2) / cy) * cy;
+						object.x_add /= 2;
+						object.y_add = -object.y_add / 2;
+					} else if (Tile.isOneOf(getTile(object.y, object.x), [Tile.GROUND, Tile.SPRING])) {
+						if (object.y_add > 32 * UNIT) {
+							object.y = Math.floor((object.y + cy / 2) / cy) * cy - UNIT;
+							object.x_add /= 2;
+							object.y_add = -object.y_add / 2;
+						} else {
+							// Add some forever
+							objects.splice(i, 1);
+							continue;
+						}
+					} else if (getTile(object.y, object.x) == Tile.ICE) {
+						object.y = Math.floor((object.y + cy / 2) / cy) * cy - UNIT;
+						if (object.y_add > 32 * UNIT) {
+							object.y_add = -object.y_add / 2;
+						} else {
+							object.y_add = 0;
+						}
+					}
+				}
+				if (Tile.isOneOf(getTile(object.y, object.x), [Tile.GROUND, Tile.ICE, Tile.SPRING])) {
+					object.x = Math.floor((object.x + cx / 2) / cx) * cx;
+					object.x_add = -object.x_add / 2;
+				}
+				if (object.x_add < 0 && object.x_add > -4 * UNIT)
+					object.x_add = -4 * UNIT;
+				if (object.x_add > 0 && object.x_add < 4 * UNIT)
+					object.x_add = 4 * UNIT;
+
+				screen.addSprite(objectsAtlas.getSprite(object.image), Math.floor(object.x), Math.floor(object.y));
 			}
-			screen.addSprite(objectsAtlas.getSprite(object.image), Math.floor(object.x), Math.floor(object.y));
 		}
 	}
 
@@ -483,15 +645,33 @@ var JumpBump = (function(){
 					if (p1.y < p2.y) {
 						if (p1.y_add >= 0) {
 							p1.y_add = -p1.y_add;
-							if (p1.y_add > 4) {
-								p1.y_add = 4;
+							if (p1.y_add > -4) {
+								p1.y_add = -4;
 							}
 							p1.jump_abort = true;
 							p2.dead_flag = true;
 
 							if (p2.anim != PlayerAnimation.DEATH) {
 								p2.setAnimation(PlayerAnimation.DEATH);
+
+								for (var a = 0; a < 6; ++a) {
+									addObject(new GameObject.Fur(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FUR, p2.id);
+								}
+								for (var a = 0; a < 6; ++a) {
+									addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 0);
+								}
+								for (var a = 0; a < 6; ++a) {
+									addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 1);
+								}
+								for (var a = 0; a < 6; ++a) {
+									addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 2);
+								}
+								for (var a = 0; a < 6; ++a) {
+									addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 3);
+								}
 							}
+
+							
 						} else {
 							if (p2.y_add < 0) p2.y_add = 0;
 						}
@@ -523,7 +703,6 @@ var JumpBump = (function(){
 	}
 
 	function updatePlayer(player) {
-		var UNIT = 1.0 / 16;
 		var cx = level.TILE_WIDTH, cy = level.TILE_HEIGHT;
 
 		if (player.dead_flag) {
@@ -545,6 +724,9 @@ var JumpBump = (function(){
 			} else {
 				if (player.x_add > 0) {
 					player.x_add -= 4 * UNIT;
+					if (!player.in_water && getTile(player.y + cy, player.x + cx / 8) == Tile.GROUND) {
+						addObject(new GameObject.Smoke(), player.x + 2 + rnd(9), player.y + 13 + rnd(5), 0, -4 * UNIT - Math.random() * 2 * UNIT, ObjectAnimation.SMOKE, 0);
+					}
 				} else {
 					player.x_add -= 3 * UNIT;
 				}
@@ -569,6 +751,9 @@ var JumpBump = (function(){
 			} else {
 				if (player.x_add < 0) {
 					player.x_add += 4 * UNIT;
+					if (!player.in_water && getTile(player.y + cy, player.x + cx / 8) == Tile.GROUND) {
+						addObject(new GameObject.Smoke(), player.x + 2 + rnd(9), player.y + 13 + rnd(5), 0, -4 * UNIT - Math.random() * 2 * UNIT, ObjectAnimation.SMOKE, 0);
+					}
 				} else {
 					player.x_add += 3 * UNIT;
 				}
@@ -592,6 +777,9 @@ var JumpBump = (function(){
 					player.x_add -= 4 * UNIT;
 					if (player.x_add < 0)
 						player.x_add = 0;
+				}
+				if (player.x_add != 0 && getTile(player.y + cy, player.x + cx / 2) == Tile.GROUND) {
+					addObject(new GameObject.Smoke(), player.x + 2 + rnd(9), player.y + 13 + rnd(5), 0, -4 * UNIT - Math.random() * 2 * UNIT, ObjectAnimation.SMOKE, 0);
 				}
 			}
 			if (player.anim == PlayerAnimation.RUN) {
