@@ -90,6 +90,7 @@ function Player(id) {
 	this.frame_tick = 0;
 	this.image = 0;
 	this.anim = PlayerAnimation.NONE;
+	this.bumps = 0;
 
 	this.setAnimation = function (anim) {
 		this.anim = anim;
@@ -299,22 +300,25 @@ function Input() {
 }
 
 var JumpBump = (function(){
-    // Default dimensions of the world
+	// Default dimensions of the world
 	var DEFAULT_WIDTH = 400,
 		DEFAULT_HEIGHT = 256;
 	var MENU_FADE_IN_DURATION = 600;
 	var SCALE = 2;
 	var UNIT = 1.0 / 16;
 
-    // Flags if the game should output debug information
-	var DEBUG = URLUtil.queryValue('debug') == '1';
+	// Flags if the game should output debug information
+	var options = {
+		showGore: URLUtil.queryValue('nogore') != '1',
+		debug: URLUtil.queryValue('debug') == '1'
+	};
 
 	var TOUCH_INPUT = navigator.userAgent.match(/(iPhone|iPad|iPod|Android)/i);
 
-    // The world dimensions
+	// The world dimensions
 	var world = {
-	    width: DEFAULT_WIDTH,
-	    height: DEFAULT_HEIGHT
+		width: DEFAULT_WIDTH,
+		height: DEFAULT_HEIGHT
 	};
 	var screenSize = {
 		width: DEFAULT_WIDTH,
@@ -328,8 +332,10 @@ var JumpBump = (function(){
 	var players = [];
 	var screen;
 	var objects = [];
+	var leftovers = {};
 	var rabbitAtlas;
 	var objectsAtlas;
+	var numbersAtlas;
 	var input;
 	var level;
 	var menuMode = false;
@@ -350,17 +356,18 @@ var JumpBump = (function(){
 		input = new Input();
 		input.init();
 
-	    // Force an initial layout
+		// Force an initial layout
 		onWindowResizeHandler();
 
 		loadSprites();
 		loadLevel();
+		loadSound();
 		initScreen();
 		createPlayers();
 		reset();
 		update();
 
-        container.fadeIn(MENU_FADE_IN_DURATION);
+		container.fadeIn(MENU_FADE_IN_DURATION);
 	}
 
 	function loadSprites() {
@@ -372,6 +379,9 @@ var JumpBump = (function(){
 
 		objectsAtlas = new Atlas();
 		objectsAtlas.load('images/objects.json.txt');
+
+		numbersAtlas = new Atlas();
+		numbersAtlas.load('images/numbers.json.txt');
 	}
 
 	function loadLevel() {
@@ -388,6 +398,36 @@ var JumpBump = (function(){
 				}
 			}
 		}
+	}
+	function loadSound() {
+		return;
+		var soundRequest = new XMLHttpRequest();
+		soundRequest.open("GET", "sound/bump.mp3", true);
+		soundRequest.responseType = "arraybuffer";
+
+		soundRequest.onload = function () {
+			try {
+				var context = new webkitAudioContext();
+
+				var mainNode = context.createGainNode(0);
+				mainNode.connect(context.destination);
+
+				var clip = context.createBufferSource();
+
+				context.decodeAudioData(soundRequest.response, function (buffer) {
+					clip.buffer = buffer;
+					clip.gain.value = 1.0;
+					clip.connect(mainNode);
+					clip.loop = true;
+					clip.noteOn(0);
+				}, function (data) { });
+			}
+			catch (e) {
+				console.warn('Web Audio API is not supported in this browser');
+			}
+		};
+
+		soundRequest.send();
 	}
 
 	function initScreen() {
@@ -424,6 +464,10 @@ var JumpBump = (function(){
 		for (var i in players) {
 			var player = players[i];
 			screen.addSprite(rabbitAtlas.getSprite(player.image + 18 * player.id), Math.floor(player.x),  Math.floor(player.y));
+		}
+		for (var i in leftovers) {
+			var leftover = leftovers[i];
+			screen.addSprite(leftover.sprite, Math.floor(leftover.x), Math.floor(leftover.y));
 		}
 
 		updateObjects();
@@ -630,6 +674,16 @@ var JumpBump = (function(){
 		objects.push(object);
 	}
 
+	function addLeftover(name, sprite, x, y) {
+		var leftover = {
+			sprite: sprite,
+			x: x,
+			y: y
+		}
+		leftovers[name] = leftover;
+		console.log(leftovers);
+	}
+
 	function checkDeath() {
 		for (var i = 0; i < players.length; ++i) {
 			for (var j = 0; j < i; ++j) {
@@ -656,21 +710,27 @@ var JumpBump = (function(){
 							if (p2.anim != PlayerAnimation.DEATH) {
 								p2.setAnimation(PlayerAnimation.DEATH);
 
-								for (var a = 0; a < 6; ++a) {
-									addObject(new GameObject.Fur(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FUR, p2.id);
+								if (options.showGore) {
+									for (var a = 0; a < 6; ++a) {
+										addObject(new GameObject.Fur(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FUR, p2.id);
+									}
+									for (var a = 0; a < 6; ++a) {
+										addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 0);
+									}
+									for (var a = 0; a < 6; ++a) {
+										addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 1);
+									}
+									for (var a = 0; a < 6; ++a) {
+										addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 2);
+									}
+									for (var a = 0; a < 6; ++a) {
+										addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 3);
+									}
 								}
-								for (var a = 0; a < 6; ++a) {
-									addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 0);
-								}
-								for (var a = 0; a < 6; ++a) {
-									addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 1);
-								}
-								for (var a = 0; a < 6; ++a) {
-									addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 2);
-								}
-								for (var a = 0; a < 6; ++a) {
-									addObject(new GameObject.Flesh(), p2.x + 6 + rnd(5), p2.y + 6 + rnd(5), (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, ObjectAnimation.FLESH_TRACE, 3);
-								}
+								// TODO: Dead sound
+								p1.bumps++;
+								addLeftover('l' + p1.id, numbersAtlas.getSprite(Math.floor(p1.bumps / 10) % 10), 360, 34 + p1.id * 64);
+								addLeftover('r' + p1.id, numbersAtlas.getSprite(p1.bumps % 10), 376, 34 + p1.id * 64);
 							}
 
 							
@@ -993,30 +1053,30 @@ var JumpBump = (function(){
 	}
 
 	function onWindowResizeHandler() {
-	    // Update the game size
-	    world.width = TOUCH_INPUT ? window.innerWidth : DEFAULT_WIDTH;
-	    world.height = TOUCH_INPUT ? window.innerHeight : DEFAULT_HEIGHT;
+		// Update the game size
+		world.width = DEFAULT_WIDTH;
+		world.height = DEFAULT_HEIGHT;
 
-	    screenSize.width = world.width * SCALE;
-	    screenSize.height = world.height * SCALE;
+		screenSize.width = world.width * SCALE;
+		screenSize.height = world.height * SCALE;
 
-	    // Resize the container
-	    container.width(screenSize.width);
-	    container.height(screenSize.height);
+		// Resize the container
+		container.width(screenSize.width);
+		container.height(screenSize.height);
 
-	    // Resize the canvas
-	    canvas.width = screenSize.width;
-	    canvas.height = screenSize.height;
+		// Resize the canvas
+		canvas.width = screenSize.width;
+		canvas.height = screenSize.height;
 
-	    // Determine the x/y position of the canvas
-	    var cx = Math.max((window.innerWidth - screenSize.width) * 0.5, 1);
-	    var cy = Math.max((window.innerHeight - screenSize.height) * 0.5, 1);
+		// Determine the x/y position of the canvas
+		var cx = Math.max((window.innerWidth - screenSize.width) * 0.5, 1);
+		var cy = Math.max((window.innerHeight - screenSize.height) * 0.5, 1);
 
-	    // Update the position of the canvas
-	    container.css({
-	        left: cx,
-	        top: cy
-	    });
+		// Update the position of the canvas
+		container.css({
+			left: cx,
+			top: cy
+		});
 
 	}
 	
