@@ -310,7 +310,8 @@ var JumpBump = (function(){
 	// Flags if the game should output debug information
 	var options = {
 		showGore: URLUtil.queryValue('nogore') != '1',
-		debug: URLUtil.queryValue('debug') == '1'
+		debug: URLUtil.queryValue('debug') == '1',
+		sound: URLUtil.queryValue('nosound') != '1'
 	};
 
 	var TOUCH_INPUT = navigator.userAgent.match(/(iPhone|iPad|iPod|Android)/i);
@@ -400,7 +401,9 @@ var JumpBump = (function(){
 		}
 	}
 	function loadSound() {
-		return;
+		if (!options.sound) {
+			return;
+		}
 		var soundRequest = new XMLHttpRequest();
 		soundRequest.open("GET", "sound/bump.mp3", true);
 		soundRequest.responseType = "arraybuffer";
@@ -681,7 +684,6 @@ var JumpBump = (function(){
 			y: y
 		}
 		leftovers[name] = leftover;
-		console.log(leftovers);
 	}
 
 	function checkDeath() {
