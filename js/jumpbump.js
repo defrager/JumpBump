@@ -325,6 +325,12 @@ var JumpBump = (function(){
 		width: DEFAULT_WIDTH,
 		height: DEFAULT_HEIGHT
 	};
+	var Sound = {
+		JUMP: null,
+		WATER_SPLASH: null,
+		DEADTH: null
+	};
+	var audioContext;
 
 	var canvas,
 		context;
@@ -400,37 +406,60 @@ var JumpBump = (function(){
 			}
 		}
 	}
-	function loadSound() {
-		if (!options.sound) {
+
+	function playSound(sound) {
+		if (sound == null) {
 			return;
 		}
+		var clip = audioContext.createBufferSource();
+		clip.connect(audioContext.destination);
+		clip.buffer = sound;
+		//clip.gain.value = 1.0;
+		//clip.connect(mainNode);
+		//clip.loop = false;
+		clip.noteOn(0);
+	}
+	function loadSound() {
+		try {
+			audioContext = new webkitAudioContext();
+			loadSoundFile("sound/jump.wav", function (buffer) { Sound.JUMP = buffer; })
+			loadSoundFile("sound/water-splash.wav", function (buffer) { Sound.WATER_SPLASH = buffer; })
+			loadSoundFile("sound/deadth.wav", function (buffer) { Sound.DEADTH = buffer; })
+			loadMusic();
+		}
+		catch (e) {
+			console.warn('Web Audio API is not supported in this browser');
+		}
+	}
+	function loadSoundFile(urlSound, onSoundLoad) {
 		var soundRequest = new XMLHttpRequest();
-		soundRequest.open("GET", "sound/bump.mp3", true);
+		soundRequest.open("GET", urlSound, true);
 		soundRequest.responseType = "arraybuffer";
-
 		soundRequest.onload = function () {
-			try {
-				var context = new webkitAudioContext();
-
-				var mainNode = context.createGainNode(0);
-				mainNode.connect(context.destination);
-
-				var clip = context.createBufferSource();
-
-				context.decodeAudioData(soundRequest.response, function (buffer) {
-					clip.buffer = buffer;
-					clip.gain.value = 1.0;
-					clip.connect(mainNode);
-					clip.loop = true;
-					clip.noteOn(0);
-				}, function (data) { });
-			}
-			catch (e) {
-				console.warn('Web Audio API is not supported in this browser');
-			}
+			audioContext.decodeAudioData(soundRequest.response, function (buffer) {
+				onSoundLoad(buffer);
+			}, function (data) { });	
 		};
 
 		soundRequest.send();
+	}
+
+
+	function loadMusic() {
+		if (!options.sound) {
+			return;
+		}
+		loadSoundFile("sound/bump.mp3", function (buffer) {
+			var mainNode = audioContext.createGainNode(0);
+			mainNode.connect(audioContext.destination);
+
+			var clip = audioContext.createBufferSource();
+			clip.buffer = buffer;
+			clip.gain.value = 0.5;
+			clip.connect(mainNode);
+			clip.loop = true;
+			clip.noteOn(0);
+		});
 	}
 
 	function initScreen() {
@@ -711,6 +740,7 @@ var JumpBump = (function(){
 
 							if (p2.anim != PlayerAnimation.DEATH) {
 								p2.setAnimation(PlayerAnimation.DEATH);
+								playSound(Sound.DEADTH);
 
 								if (options.showGore) {
 									for (var a = 0; a < 6; ++a) {
@@ -857,6 +887,7 @@ var JumpBump = (function(){
 				player.setAnimation(PlayerAnimation.JUMPUP);
 				player.jump_ready = false;
 				player.jump_abort = true;
+				playSound(Sound.JUMP);
 			}
 			if ((getTile(player.y + cy / 2 - 1, player.x) == Tile.NONE || getTile(player.y + cy / 2 - 1, player.x + cx - 1) == Tile.NONE)
 				&& (getTile(player.y + cy / 2 + 1, player.x) == Tile.WATER || getTile(player.y + cy / 2 + 1, player.x + cx - 1) == Tile.WATER)) {
@@ -865,6 +896,7 @@ var JumpBump = (function(){
 				player.setAnimation(PlayerAnimation.JUMPUP);
 				player.jump_ready = false;
 				player.jump_abort = true;
+				playSound(Sound.JUMP);
 			}
 		} else if (!input.actions['move-up-' + player.id]) {
 			player.jump_ready = true;
@@ -907,7 +939,7 @@ var JumpBump = (function(){
 			player.setAnimation(PlayerAnimation.JUMPUP);
 			player.jump_ready = false;
 			player.jump_abort = false;
-			console.log("Jump");
+			playSound(Sound.JUMP);
 
 			for (var i in objects) {
 				var object = objects[i];
@@ -932,6 +964,7 @@ var JumpBump = (function(){
 				if (player.y_add >= 8 * UNIT) {
 					// TODO: Add Splash sound.
 					addObject(new GameObject.Splash(), player.x + 8, Math.floor((player.y) / cy) * cy + cy - 1, 0, 0, ObjectAnimation.SPLASH, 0);
+					playSound(Sound.WATER_SPLASH);
 				}
 			}
 			player.y_add -= 0.375 * UNIT;
